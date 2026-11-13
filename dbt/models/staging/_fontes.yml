@@ -1,0 +1,28 @@
+version: 2
+
+# O DuckDB lê o lake Delta e os CSVs de referência no lugar, sem cópia para o banco.
+sources:
+  - name: lake
+    tables:
+      - name: silver_viagens
+        config:
+          meta:
+            external_location: "delta_scan('{{ env_var('LAKE_PATH', '../dados/lake') }}/silver/viagens')"
+      - name: silver_quarentena
+        config:
+          meta:
+            external_location: "delta_scan('{{ env_var('LAKE_PATH', '../dados/lake') }}/silver/quarentena')"
+      - name: silver_clima
+        config:
+          meta:
+            external_location: "delta_scan('{{ env_var('LAKE_PATH', '../dados/lake') }}/silver/clima')"
+  - name: referencia
+    tables:
+      - name: zonas
+        config:
+          meta:
+            external_location: "read_csv('{{ env_var('REFERENCIA_PATH', '../dados/raw/referencia') }}/taxi_zone_lookup.csv', header = true)"
+      - name: relatorio_oficial
+        config:
+          meta:
+            external_location: "read_csv('{{ env_var('REFERENCIA_PATH', '../dados/raw/referencia') }}/data_reports_monthly.csv', header = true, all_varchar = true)"

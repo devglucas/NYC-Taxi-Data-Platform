@@ -1,0 +1,22 @@
+name: plataforma_taxi
+version: "1.0.0"
+config-version: 2
+profile: plataforma_taxi
+
+model-paths: [models]
+macro-paths: [macros]
+test-paths: [tests]
+
+vars:
+  # Mês a processar nos modelos incrementais; vazio processa todos.
+  mes: null
+  tolerancia_oficial_pct: 3
+
+models:
+  plataforma_taxi:
+    staging:
+      +materialized: view
+    intermediate:
+      +materialized: incremental
+    marts:
+      +materialized: table

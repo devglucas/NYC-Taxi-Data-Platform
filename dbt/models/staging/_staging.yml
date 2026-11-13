@@ -1,0 +1,57 @@
+version: 2
+
+models:
+  - name: stg_viagens
+    description: Viagens da silver em Delta, com nomes em português.
+    columns:
+      - name: canal
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Rua ou ponto", "App de alto volume", "Outros apps"]
+      - name: zona_origem
+        data_tests: [not_null]
+
+  - name: stg_clima_hora
+    description: Clima por hora local em Central Park, pela Open-Meteo.
+    columns:
+      - name: hora
+        data_tests: [unique, not_null]
+      - name: condicao
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Seco", "Chuva fraca", "Chuva moderada ou forte", "Neve"]
+
+  - name: stg_zonas
+    columns:
+      - name: zona_id
+        data_tests: [unique, not_null]
+
+  - name: stg_relatorio_oficial
+    columns:
+      - name: mes
+        data_tests: [unique]
+
+unit_tests:
+  - name: condicao_do_tempo_segue_os_limiares
+    model: stg_clima_hora
+    given:
+      - input: source('lake', 'silver_clima')
+        format: sql
+        rows: |
+          select '2026-09' as mes, timestamp '2026-09-01 00:00' as hora_local, date '2026-09-01' as data,
+                 20.0 as temperatura_c, 0.0 as precipitacao_mm, 0.0 as neve_cm, 5.0 as vento_kmh
+          union all select '2026-09', timestamp '2026-09-01 01:00', date '2026-09-01', 20.0, 0.09, 0.0, 5.0
+          union all select '2026-09', timestamp '2026-09-01 02:00', date '2026-09-01', 20.0, 0.1, 0.0, 5.0
+          union all select '2026-09', timestamp '2026-09-01 03:00', date '2026-09-01', 20.0, 2.5, 0.0, 5.0
+          union all select '2026-09', timestamp '2026-09-01 04:00', date '2026-09-01', -1.0, 0.0, 0.4, 5.0
+          union all select '2026-09', timestamp '2026-09-01 05:00', date '2026-09-01', 20.0, null, null, 5.0
+    expect:
+      rows:
+        - {hora: "2026-09-01 00:00:00", condicao: Seco}
+        - {hora: "2026-09-01 01:00:00", condicao: Seco}
+        - {hora: "2026-09-01 02:00:00", condicao: Chuva fraca}
+        - {hora: "2026-09-01 03:00:00", condicao: Chuva moderada ou forte}
+        - {hora: "2026-09-01 04:00:00", condicao: Neve}
+        - {hora: "2026-09-01 05:00:00", condicao: Seco}

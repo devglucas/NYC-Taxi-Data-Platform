@@ -1,0 +1,141 @@
+version: 2
+
+models:
+  - name: dim_zona
+    description: As 265 zonas de táxi da TLC.
+    columns:
+      - name: zona_id
+        data_tests: [unique, not_null]
+
+  - name: dim_data
+    columns:
+      - name: data
+        data_tests: [unique, not_null]
+
+  - name: fct_viagens_hora
+    description: Viagens por hora e zona de embarque.
+    data_tests:
+      - combinacao_unica:
+          arguments:
+            colunas: [hora, zona_origem]
+    columns:
+      - name: zona_origem
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_zona')
+                field: zona_id
+
+  - name: fct_demanda_clima
+    description: Viagens da cidade por hora, com o clima e um índice contra horas secas comparáveis.
+    config:
+      contract: {enforced: true}
+    columns:
+      - {name: mes, data_type: varchar, constraints: [{type: not_null}]}
+      - {name: hora, data_type: timestamp, constraints: [{type: not_null}], data_tests: [unique]}
+      - {name: dia_semana_num, data_type: bigint}
+      - {name: hora_do_dia, data_type: bigint}
+      - {name: viagens, data_type: hugeint}
+      - {name: total_usd, data_type: double}
+      - {name: gorjeta_pct_cartao, data_type: double}
+      - {name: minutos_medios, data_type: double}
+      - {name: velocidade_media_mph, data_type: double}
+      - {name: temperatura_c, data_type: double}
+      - {name: precipitacao_mm, data_type: double}
+      - {name: neve_cm, data_type: double}
+      - {name: condicao, data_type: varchar}
+      - {name: viagens_referencia_seco, data_type: double}
+      - name: indice_demanda
+        data_type: double
+        description: Viagens da hora divididas pela mediana das horas secas comparáveis do mês.
+
+  - name: fct_zonas_mes
+    config:
+      contract: {enforced: true}
+    data_tests:
+      - combinacao_unica:
+          arguments:
+            colunas: [mes, zona_origem]
+    columns:
+      - {name: mes, data_type: varchar, constraints: [{type: not_null}]}
+      - name: zona_origem
+        data_type: integer
+        constraints: [{type: not_null}]
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_zona')
+                field: zona_id
+      - {name: viagens, data_type: hugeint}
+      - {name: total_usd, data_type: double}
+      - {name: ticket_medio_usd, data_type: double}
+      - {name: minutos_medios, data_type: double}
+      - {name: pct_cartao, data_type: double}
+      - {name: pct_app, data_type: double}
+      - {name: pct_taxa_cbd, data_type: double}
+
+  - name: fct_rotas_mes
+    data_tests:
+      - combinacao_unica:
+          arguments:
+            colunas: [mes, zona_origem, zona_destino]
+
+  - name: fct_mensal
+    data_tests:
+      - combinacao_unica:
+          arguments:
+            colunas: [mes, canal, pagamento]
+
+  - name: mart_conciliacao_oficial
+    description: Viagens por dia contra o relatório mensal que a TLC publica.
+    columns:
+      - name: mes
+        data_tests: [unique]
+      - name: estado
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [ok, pendente]
+              config:
+                severity: warn
+
+unit_tests:
+  - name: conciliacao_classifica_os_meses
+    model: mart_conciliacao_oficial
+    given:
+      - input: ref('int_viagens_hora_zona')
+        rows:
+          - {mes: "2026-06", viagens: 3000}
+          - {mes: "2026-07", viagens: 3100}
+          - {mes: "2026-08", viagens: 3100}
+      - input: ref('stg_relatorio_oficial')
+        rows:
+          - {mes: "2026-06", viagens_dia_oficial: 100}
+          - {mes: "2026-07", viagens_dia_oficial: 80}
+    expect:
+      rows:
+        - {mes: "2026-06", viagens_dia_pipeline: 100.0, diferenca_pct: 0.0, estado: ok}
+        - {mes: "2026-07", viagens_dia_pipeline: 100.0, diferenca_pct: 25.0, estado: divergente}
+        - {mes: "2026-08", viagens_dia_pipeline: 100.0, diferenca_pct: null, estado: pendente}
+
+  - name: indice_compara_com_horas_secas_iguais
+    model: fct_demanda_clima
+    overrides:
+      macros:
+        is_incremental: false
+    given:
+      - input: ref('int_viagens_hora_zona')
+        rows:
+          - {mes: "2026-09", hora: "2026-09-07 08:00:00", pagamento: 1, viagens: 100, total_usd: 10, gorjeta_usd: 2, tarifa_usd: 10, viagens_duracao_valida: 100, minutos_validos: 1000, distancia_duracao_valida: 200}
+          - {mes: "2026-09", hora: "2026-09-14 08:00:00", pagamento: 1, viagens: 120, total_usd: 10, gorjeta_usd: 2, tarifa_usd: 10, viagens_duracao_valida: 120, minutos_validos: 1200, distancia_duracao_valida: 240}
+          - {mes: "2026-09", hora: "2026-09-21 08:00:00", pagamento: 1, viagens: 165, total_usd: 10, gorjeta_usd: 2, tarifa_usd: 10, viagens_duracao_valida: 165, minutos_validos: 1650, distancia_duracao_valida: 330}
+      - input: ref('stg_clima_hora')
+        rows:
+          - {hora: "2026-09-07 08:00:00", condicao: Seco}
+          - {hora: "2026-09-14 08:00:00", condicao: Seco}
+          - {hora: "2026-09-21 08:00:00", condicao: Chuva moderada ou forte}
+    expect:
+      rows:
+        - {hora: "2026-09-07 08:00:00", viagens_referencia_seco: 110, indice_demanda: 0.9091, gorjeta_pct_cartao: 20.0}
+        - {hora: "2026-09-14 08:00:00", viagens_referencia_seco: 110, indice_demanda: 1.0909, gorjeta_pct_cartao: 20.0}
+        - {hora: "2026-09-21 08:00:00", viagens_referencia_seco: 110, indice_demanda: 1.5, gorjeta_pct_cartao: 20.0}
