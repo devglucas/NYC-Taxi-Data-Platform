@@ -5,6 +5,6 @@ plataforma_taxi:
       type: duckdb
       path: "{{ env_var('WAREHOUSE_PATH', '../dados/warehouse.duckdb') }}"
       extensions: [delta]
-      threads: 2
+      threads: "{{ env_var('DBT_THREADS', '2') | as_number }}"
       settings:
         memory_limit: "{{ env_var('DUCKDB_MEMORIA', '2GB') }}"
