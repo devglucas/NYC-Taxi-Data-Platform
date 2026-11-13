@@ -108,7 +108,7 @@ def _gorjeta(con, caminhos) -> tuple[str, str]:
     ax.set_xticks(range(0, 24, 2), [f"{h}h" for h in range(0, 24, 2)])
     ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:.0f}%"))
     ax.set_ylabel("gorjeta sobre a tarifa,\nem pagamentos com cartão")
-    titulo = f"A gorjeta vai de {minimo[1]:.1f}% às {minimo[0]}h a {maximo[1]:.1f}% às {maximo[0]}h"
+    titulo = f"A gorjeta vai de {minimo[1]:.1f}% às {minimo[0]}h a {maximo[1]:.1f}% às {maximo[0]}h".replace(".", ",")
     ax.set_title(titulo)
     return titulo, _salvar(fig, caminhos, "03_gorjeta_por_hora")
 
