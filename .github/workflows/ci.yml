@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pipeline:
+    name: Lint, testes, Spark e dbt
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Dependências
+        run: pip install -r requirements.txt
+      - name: Lint
+        run: ruff check .
+      - name: Testes unitários e de Spark
+        run: pytest -q
+      - name: Pipeline de ponta a ponta com amostra sintética
+        env:
+          DADOS_DIR: ${{ runner.temp }}/dados
+          OUTPUT_DIR: ${{ runner.temp }}/output
+        run: |
+          python scripts/gerar_amostra.py "$DADOS_DIR"
+          python main.py --sem-download 2026-01 2026-02
+          python scripts/comparar_incremental.py 2026-02
+
+  dags:
+    name: Integridade das DAGs
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Airflow com as restrições oficiais
+        run: |
+          pip install "apache-airflow==3.4.0" --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-3.4.0/constraints-3.12.txt"
+          pip install duckdb==2.0.0 pytest
+      - name: Testes das DAGs
+        run: pytest -q tests/test_dags.py
