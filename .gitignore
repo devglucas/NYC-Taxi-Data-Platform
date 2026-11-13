@@ -1,0 +1,16 @@
+dados/
+logs/
+plugins/
+.env
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.pyc
+.DS_Store
+dbt/target/
+dbt/logs/
+dbt/dbt_packages/
+dbt/.user.yml
+spark-warehouse/
+metastore_db/
+derby.log
